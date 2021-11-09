@@ -10,6 +10,7 @@
     "compile": "npx hardhat compile",
     "clean": "npx hardhat clean",
     "start": "npx hardhat run scripts/deployAll.js",
+    "deploy:bsc:test":"npx hardhat run ./scripts/dt.js --network polygon-mumbai",
     "lint:sol": "solhint -f table contracts/**/*.sol",
     "bonds:monitor": "npx hardhat run ./scripts/monitorBonds.js --network polygon-mainnet",
     "bonds:adjust": "npx hardhat run ./scripts/adjustBonds.js --network polygon-mainnet"
