@@ -13,7 +13,7 @@ async function main() {
   )
   const bonds = [
     { name: 'MAI', address: '0x779CB532e289CbaA3d0692Ae989C63C2B4fBd4d0' },
-    { name: 'CLAM-MAI', address: '0x706587BD39322A6a78ddD5491cDbb783F8FD983E' },
+    { name: 'CLAM-MAI', address: '0xda0d7c3d751d00a1ec1c495eF7Cf3db1a202B0B9' },
     { name: 'FRAX', address: '0x9e1430EB3b56e8953a342BFBBdD2DDC3b6E84d9D' },
   ]
 
@@ -21,6 +21,14 @@ async function main() {
     const bond = OtterBondDepository.attach(address)
     await fetchBondInfo(name, bond)
     bond.on('BondCreated', async (deposit, payout, _, priceInUSD) => {
+      const [terms, debtRatio, adjustment] = await Promise.all([
+        bond.terms(),
+        bond.standardizedDebtRatio(),
+        bond.adjustment(),
+      ])
+      const marketPrice = Number(
+        ethers.utils.formatUnits(await getMarketPrice(), 9)
+      )
       console.log(`==== New Bond ${name} created! ==== ` + new Date())
       console.log(
         JSON.stringify(
@@ -33,22 +41,35 @@ async function main() {
             total: priceFormatter.format(
               ethers.utils.formatEther(payout.mul(priceInUSD).div(1e9))
             ),
+            marketPrice: priceFormatter.format(marketPrice),
+            bcv: terms[0].toString(),
+            ROI: Intl.NumberFormat('en', {
+              style: 'percent',
+              minimumFractionDigits: 2,
+            }).format((marketPrice - priceInUSD) / priceInUSD),
+            minPrice: terms[2].toString(),
+            debtRatio:
+              name === 'MAI' || name === 'FRAX'
+                ? ethers.utils.formatUnits(debtRatio, 7) + '%'
+                : ethers.utils.formatUnits(debtRatio, 16) + '%',
+            adjustment: `${
+              adjustment[0] ? '+' : '-'
+            }${adjustment[1].toString()} target: ${adjustment[2].toString()} buffer: ${adjustment[3].toString()}`,
           },
           null,
           2
         )
       )
-      console.log(`=================================== ` + new Date())
     })
   }
 
-  setInterval(async () => {
-    console.log('==== ' + new Date())
-    for (const { name, address } of bonds) {
-      const bond = OtterBondDepository.attach(address)
-      await fetchBondInfo(name, bond)
-    }
-  }, 60 * 1000)
+  // setInterval(async () => {
+  //   console.log('==== ' + new Date())
+  //   for (const { name, address } of bonds) {
+  //     const bond = OtterBondDepository.attach(address)
+  //     await fetchBondInfo(name, bond)
+  //   }
+  // }, 60 * 1000)
 }
 
 async function fetchBondInfo(name, bond) {
@@ -80,6 +101,7 @@ async function fetchBondInfo(name, bond) {
           style: 'percent',
           minimumFractionDigits: 2,
         }).format((marketPrice - bondPrice) / bondPrice),
+        minPrice: terms[2].toString(),
       },
       null,
       2

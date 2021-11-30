@@ -35,7 +35,7 @@ await hre.network.provider.request({ method: 'hardhat_impersonateAccount', param
 let deployer = await ethers.getSigner('0x63B0fB7FE68342aFad3D63eF743DE4A74CDF462B')
 
 const Treasury = await ethers.getContractFactory('OtterTreasury')
-let treasury = Treasury.attach('0x8ce47D56EAa1299d3e06FF3E04637449fFb01C9C').connect(deployer)
+let treasury = Treasury.attach('0x8ce47D56EAa1299d3e06FF3E04637449fFb01C9C').connect(multisig)
 
 const ERC20 = await ethers.getContractFactory('OtterClamERC20V2')
 let clam = ERC20.attach(addresses.CLAM_ADDRESS)
@@ -51,21 +51,28 @@ const DAI = await ethers.getContractFactory("DAI");
 const dai = await DAI.deploy(0)
 await dai.mint('', ethers.utils.parseEther('10000'))
 
-let FraxBond = await ethers.getContractFactory('OtterBondStakeDepository')
-// let fraxBond = FraxBond.attach('0x5Fa0FBDb07Fe9647B43426dcc79da984f0327E4a')
-let fraxBond = await FraxBond.deploy( addresses.CLAM_ADDRESS, addresses.sCLAM_ADDRESS, fraxAddr, addresses.TREASURY_ADDRESS, '0x929a27c46041196e1a49c7b459d63ec9a20cd879', zeroAddress)
-await fraxBond.setStaking(staking.address)
+let Bond = await ethers.getContractFactory('OtterBondStakeDepository')
+let bond = Bond.attach('0xda0d7c3d751d00a1ec1c495eF7Cf3db1a202B0B9').connect(deployer)
+// let bond = await Bond.deploy( addresses.CLAM_ADDRESS, addresses.sCLAM_ADDRESS, fraxAddr, addresses.TREASURY_ADDRESS, '0x929a27c46041196e1a49c7b459d63ec9a20cd879', zeroAddress)
+// await bond.setStaking(staking.address)
 
-await treasury.queue('0', fraxBond.address)
+// await treasury.queue('0', bond.address)
 // await treasury.queue('2', dai.address)
 
-for (var i = 0; i < 43201; i++) { await hre.network.provider.request({ method: 'evm_mine' }); console.log(i); }
+// for (var i = 0; i < 43201; i++) { await hre.network.provider.request({ method: 'evm_mine' }); console.log(i); }
 
-await treasury.toggle('0', fraxBond.address, zeroAddress)
+await treasury.toggle('4', bond.address, zeroAddress)
 // await treasury.toggle('2', fraxAddr, zeroAddress)
 
-const tokenMinPrice = '3800'
-await fraxBond.initializeBondTerms( '120', 5 * 86400, tokenMinPrice, '50', '10000', '8000000000000000','0')
+const tokenMinPrice = '700'
+await bond.initializeBondTerms( '120', 5 * 86400, tokenMinPrice, '50', '10000', '8000000000000000','0')
 
 await hre.network.provider.request({ method: 'evm_increaseTime', params:[86400 * 2] })
 await hre.network.provider.request({ method: 'evm_mine' });
+
+
+await hre.network.provider.request({ method: 'hardhat_impersonateAccount', params: ['0x63B0fB7FE68342aFad3D63eF743DE4A74CDF462B'] })
+let deployer = await ethers.getSigner('0x63B0fB7FE68342aFad3D63eF743DE4A74CDF462B')
+let Bond = await ethers.getContractFactory('OtterBondStakeDepository')
+let bond = Bond.attach('0xda0d7c3d751d00a1ec1c495eF7Cf3db1a202B0B9').connect( deployer)
+await bond.initializeBondTerms( '100', 432000, '0', '100', '10000', '8000000000000000', '5900000000000')
