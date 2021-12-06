@@ -15,6 +15,7 @@ async function main() {
     { name: 'MAI', address: '0x779CB532e289CbaA3d0692Ae989C63C2B4fBd4d0' },
     { name: 'CLAM-MAI', address: '0xda0d7c3d751d00a1ec1c495eF7Cf3db1a202B0B9' },
     { name: 'FRAX', address: '0x9e1430EB3b56e8953a342BFBBdD2DDC3b6E84d9D' },
+    { name: 'CLAM-FRAX', address: '0xd99c8aF24c5E7fd6E292b1682Ec0f0cB3535e002' },
   ]
 
   for (const { name, address } of bonds) {
@@ -46,7 +47,7 @@ async function main() {
             ROI: Intl.NumberFormat('en', {
               style: 'percent',
               minimumFractionDigits: 2,
-            }).format((marketPrice - priceInUSD) / priceInUSD),
+            }).format((marketPrice - Number(priceInUSD / 1e18)) / priceInUSD),
             minPrice: terms[2].toString(),
             debtRatio:
               name === 'MAI' || name === 'FRAX'
