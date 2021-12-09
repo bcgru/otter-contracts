@@ -1,12 +1,9 @@
 const { ethers, timeAndMine } = require('hardhat')
 const { expect } = require('chai')
-const {
-  formatUnits,
-  parseEther,
-  parseUnits,
-} = require('@ethersproject/units')
+const { parseEther, parseUnits } = require('@ethersproject/units')
+const { deployUniswap, getPair } = require('./helpers/uniswap')
 
-describe('OtterMaticBondDepository', () => {
+describe.only('OtterMaticBondLPDepository', () => {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -36,7 +33,9 @@ describe('OtterMaticBondDepository', () => {
     staking,
     bond,
     firstEpochTime,
-    oracle
+    oracle,
+    lp,
+    uniRouter
 
   beforeEach(async () => {
     ;[deployer, depositor, dao] = await ethers.getSigners()
@@ -91,14 +90,26 @@ describe('OtterMaticBondDepository', () => {
     )
     await stakingDistributor.addRecipient(staking.address, initialRewardRate)
 
-    const Bond = await ethers.getContractFactory('OtterMaticBondDepository')
+    const BondingCalculator = await ethers.getContractFactory(
+      'OtterBondingCalculator'
+    )
+    const bondingCalculator = await BondingCalculator.deploy(clam.address)
+
+    const { factory, router } = await deployUniswap(deployer)
+    uniRouter = router
+    await factory.createPair(dai.address, clam.address)
+    const lpAddress = factory.getPair(dai.address, clam.address)
+    lp = getPair(lpAddress, deployer)
+
+    const Bond = await ethers.getContractFactory('OtterMaticLPBondDepository')
     bond = await Bond.deploy(
       clam.address,
       sClam.address,
-      dai.address,
+      lp.address,
       treasury.address,
-      dao.address,
       staking.address,
+      bondingCalculator.address,
+      dao.address,
       oracle.address
     )
 
@@ -114,22 +125,34 @@ describe('OtterMaticBondDepository', () => {
     await treasury.queue('0', deployer.address)
     await treasury.toggle('0', deployer.address, zeroAddress)
 
+    await treasury.queue('5', lp.address)
+    await treasury.toggle('5', lp.address, bondingCalculator.address)
+
     await treasury.queue('8', bond.address)
     await treasury.toggle('8', bond.address, zeroAddress)
 
     await treasury.queue('8', stakingDistributor.address)
     await treasury.toggle('8', stakingDistributor.address, zeroAddress)
 
-    await bond.setStaking(staking.address)
-
-    // await clam.approve(stakingHelper.address, largeApproval)
     await dai.approve(treasury.address, largeApproval)
-    await dai.approve(bond.address, largeApproval)
-    await dai.connect(depositor).approve(bond.address, largeApproval)
+    await lp.approve(bond.address, largeApproval)
+    await lp.connect(depositor).approve(bond.address, largeApproval)
+
+    await dai.approve(router.address, largeApproval)
+    await clam.approve(router.address, largeApproval)
+    await dai.connect(depositor).approve(router.address, largeApproval)
+    await clam.connect(depositor).approve(router.address, largeApproval)
 
     // mint 1,000,000 DAI for testing
     await dai.mint(deployer.address, parseEther(String(100 * 10000)))
     await dai.transfer(depositor.address, parseEther('10000'))
+    // deposit to mint 25,000 CLAM
+    await treasury.deposit(
+      parseEther('100000'),
+      dai.address,
+      parseUnits('75000', 9)
+    )
+    await clam.transfer(depositor.address, parseUnits('50', 9))
   })
 
   describe('adjust', () => {
@@ -203,17 +226,24 @@ describe('OtterMaticBondDepository', () => {
     })
   })
 
-  describe('deposit', () => {
-    it('failed to redeem not fully vested bond', async () => {
-      await treasury.deposit(
-        parseEther('10000'),
+  describe('payout', () => {
+    it('should return correct payout', async () => {
+      // $50
+      await uniRouter.addLiquidity(
         dai.address,
-        parseUnits('7500', 9)
+        clam.address,
+        parseEther('500'),
+        parseUnits('10', 9),
+        0,
+        0,
+        deployer.address,
+        1000000000000
       )
+      await oracle.setRoundData(0, parseUnits('2.2', 8), 0, 1, 0)
 
       const bcv = 300
       const bondVestingLength = 10
-      const minBondPrice = 400 // bond price = $4
+      const minBondPrice = 150
       const maxBondPayout = 1000 // 1000 = 1% of CLAM total supply
       const maxBondDebt = '1000000000000000000'
       const initialBondDebt = 0
@@ -226,11 +256,91 @@ describe('OtterMaticBondDepository', () => {
         initialBondDebt
       )
 
-      await bond.deposit(parseEther('100'), largeApproval, deployer.address)
+      expect(await bond.bondPrice()).to.eq('150')
 
-      const prevDAOReserve = await clam.balanceOf(dao.address)
-      expect(prevDAOReserve).to.eq(0)
-      console.log('dao balance: ' + formatUnits(prevDAOReserve, 9))
+      const lpBalance = await lp.balanceOf(deployer.address)
+      const lpValue = await treasury.valueOfToken(lp.address, lpBalance)
+      expect(await bond.payoutFor(lpValue)).to.eq(parseUnits('94.280904156', 9))
+    })
+  })
+
+  describe('priceInUSD', () => {
+    it('should return correct price in usd', async () => {
+      // $50
+      await uniRouter.addLiquidity(
+        dai.address,
+        clam.address,
+        parseEther('500'),
+        parseUnits('10', 9),
+        0,
+        0,
+        deployer.address,
+        1000000000000
+      )
+      await oracle.setRoundData(0, parseUnits('2.2', 8), 0, 1, 0)
+
+      const bcv = 300
+      const bondVestingLength = 10
+      const minBondPrice = 150
+      const maxBondPayout = 1000 // 1000 = 1% of CLAM total supply
+      const maxBondDebt = '1000000000000000000'
+      const initialBondDebt = 0
+      await bond.initializeBondTerms(
+        bcv,
+        bondVestingLength,
+        minBondPrice,
+        maxBondPayout, // Max bond payout,
+        maxBondDebt,
+        initialBondDebt
+      )
+
+      expect(await bond.bondPriceInUSD()).to.eq(
+        parseEther('23.33452377937213661')
+      )
+    })
+  })
+
+  describe('deposit', () => {
+    beforeEach(async () => {
+      // $50
+      await uniRouter.addLiquidity(
+        dai.address,
+        clam.address,
+        parseEther('500'),
+        parseUnits('10', 9),
+        0,
+        0,
+        deployer.address,
+        1000000000000
+      )
+      await oracle.setRoundData(0, parseUnits('2.2', 8), 0, 1, 0)
+    })
+
+    it('failed to redeem not fully vested bond', async () => {
+      const bcv = 300
+      const bondVestingLength = 10
+      const minBondPrice = 150
+      const maxBondPayout = 1000 // 1000 = 1% of CLAM total supply
+      const maxBondDebt = '1000000000000000000'
+      const initialBondDebt = 0
+      await bond.initializeBondTerms(
+        bcv,
+        bondVestingLength,
+        minBondPrice,
+        maxBondPayout, // Max bond payout,
+        maxBondDebt,
+        initialBondDebt
+      )
+
+      const lpBalance = await lp.balanceOf(deployer.address)
+      await bond.deposit(lpBalance, largeApproval, deployer.address)
+      const bondInfo = await bond.bondInfo(deployer.address)
+      expect(bondInfo.payout).to.eq(parseUnits('94.280904156', 9))
+      expect(bondInfo.vesting).to.eq(10)
+      expect(bondInfo.pricePaid).to.eq(parseEther('23.334523779372136610'))
+      expect(bondInfo.gonsPayout).to.eq(
+        '2183396573481281471879252372173323493526061427090569544909976060441540496'
+      )
 
       await timeAndMine.setTimeIncrease(2)
 
@@ -240,12 +350,6 @@ describe('OtterMaticBondDepository', () => {
     })
 
     it('should redeem sCLAM when vested fully', async () => {
-      await treasury.deposit(
-        parseEther('10000'),
-        dai.address,
-        parseUnits('7500', 9)
-      )
-
       const bcv = 300
       const bondVestingLength = 15
       const minBondPrice = 400 // bond price = 4 MATIC
@@ -263,26 +367,30 @@ describe('OtterMaticBondDepository', () => {
 
       await oracle.setRoundData(0, parseUnits('2.2', 8), 0, 1, 0)
 
-      expect(await bond.bondPriceInUSD()).to.eq(parseEther('8.8'))
-
-      await expect(() =>
-        bond.deposit(parseEther('1000'), largeApproval, deployer.address)
-      ).to.changeTokenBalance(clam, dao, 0)
+      const lpBalance = await lp.balanceOf(deployer.address)
+      await bond.deposit(lpBalance, largeApproval, deployer.address)
 
       await timeAndMine.setTimeIncrease(432001)
       await staking.rebase()
 
       await expect(() =>
         bond.redeem(deployer.address, false)
-      ).to.changeTokenBalance(sClam, deployer, parseUnits('263.75', 9))
+      ).to.changeTokenBalance(sClam, deployer, parseUnits('160.532115752', 9))
     })
 
     it('should deploy twice and redeem sCLAM when vested fully', async () => {
-      await treasury.deposit(
-        parseEther('100000'),
-        dai.address,
-        parseUnits('75000', 9)
-      )
+      await uniRouter
+        .connect(depositor)
+        .addLiquidity(
+          dai.address,
+          clam.address,
+          parseEther('250'),
+          parseUnits('5', 9),
+          0,
+          0,
+          depositor.address,
+          1000000000000
+        )
 
       const bcv = 300
       const bondVestingLength = 15
@@ -299,32 +407,35 @@ describe('OtterMaticBondDepository', () => {
         initialBondDebt
       )
 
-      await expect(() =>
-        bond.deposit(parseEther('50'), largeApproval, deployer.address)
-      ).to.changeTokenBalance(clam, dao, 0)
-      await expect(() =>
-        bond
-          .connect(depositor)
-          .deposit(parseEther('500'), largeApproval, depositor.address)
-      ).to.changeTokenBalance(clam, dao, 0)
+      await bond.deposit(
+        (await lp.balanceOf(deployer.address)).div(2),
+        largeApproval,
+        deployer.address
+      )
+      const balance = await lp.balanceOf(depositor.address)
+      await bond
+        .connect(depositor)
+        .deposit(balance, largeApproval, depositor.address)
 
       await timeAndMine.setTimeIncrease(86400)
       await staking.rebase()
 
-      await expect(() =>
-        bond.deposit(parseEther('3000'), largeApproval, deployer.address)
-      ).to.changeTokenBalance(clam, dao, 0)
+      await bond.deposit(
+        await lp.balanceOf(deployer.address),
+        largeApproval,
+        deployer.address
+      )
 
       await timeAndMine.setTimeIncrease(432001)
       await staking.rebase()
 
       await expect(() =>
         bond.redeem(deployer.address, false)
-      ).to.changeTokenBalance(sClam, deployer, '116767342325')
+      ).to.changeTokenBalance(sClam, deployer, '191639081228')
 
       await expect(() =>
         bond.redeem(depositor.address, false)
-      ).to.changeTokenBalance(sClam, depositor, '331526107799')
+      ).to.changeTokenBalance(sClam, depositor, '189524252460')
     })
   })
 })

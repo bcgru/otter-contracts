@@ -25,7 +25,7 @@ let addresses = {
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
-let maticAddr = '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270'
+let maticLPAddr = '0x3fcc446c70489610462be9d61528c51151aca49f'
 let oracleAddr = '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'
 
 await hre.network.provider.request({ method: 'hardhat_impersonateAccount', params: ['0x929A27c46041196e1a49C7B459d63eC9A20cd879'] })
@@ -39,7 +39,7 @@ let treasury = Treasury.attach('0x8ce47D56EAa1299d3e06FF3E04637449fFb01C9C').con
 
 const ERC20 = await ethers.getContractFactory('OtterClamERC20V2')
 let clam = ERC20.attach(addresses.CLAM_ADDRESS)
-let wmatic = ERC20.attach(maticAddr)
+let wmatic = ERC20.attach(maticLPAddr)
 
 const StakedOtterClamERC20V2 = await ethers.getContractFactory('StakedOtterClamERC20V2')
 let sClam = StakedOtterClamERC20V2.attach(addresses.sCLAM_ADDRESS).connect(deployer)
@@ -47,15 +47,15 @@ let sClam = StakedOtterClamERC20V2.attach(addresses.sCLAM_ADDRESS).connect(deplo
 const Staking = await ethers.getContractFactory('OtterStaking')
 let staking = Staking.attach(addresses.STAKING_ADDRESS).connect(deployer)
 
-let Bond = await ethers.getContractFactory('OtterMaticBondDepository')
-let bond = Bond.attach('0x53E4DAFF2073f848DC3F7a8D7CC95b3607212A73')//.connect( deployer)
-// let bond = await Bond.deploy( addresses.CLAM_ADDRESS, addresses.sCLAM_ADDRESS, maticAddr, addresses.TREASURY_ADDRESS, '0x929a27c46041196e1a49c7b459d63ec9a20cd879', addresses.STAKING_ADDRESS, oracleAddr)
+let Bond = await ethers.getContractFactory('OtterMaticLPBondDepository')
+// let bond = Bond.attach('0x53E4DAFF2073f848DC3F7a8D7CC95b3607212A73')//.connect( deployer)
+let bond = await Bond.deploy( addresses.CLAM_ADDRESS, addresses.sCLAM_ADDRESS, maticLPAddr, addresses.TREASURY_ADDRESS, addresses.STAKING_ADDRESS, addresses.CLAM_BONDING_CALC_ADDRESS, '0x929a27c46041196e1a49c7b459d63ec9a20cd879' , oracleAddr)
 
 await treasury.queue('8', bond.address)
-await treasury.toggle('2', maticAddr, zeroAddress)
 
 for (var i = 0; i < 43201; i++) { await hre.network.provider.request({ method: 'evm_mine' }); console.log(i); }
 
+await treasury.toggle('5', maticLPAddr, addresses.CLAM_BONDING_CALC_ADDRESS)
 await treasury.toggle('8', bond.address, zeroAddress)
 // await treasury.toggle('2', maticAddr, zeroAddress)
 
