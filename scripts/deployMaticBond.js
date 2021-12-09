@@ -36,12 +36,8 @@ async function main() {
   const Treasury = await ethers.getContractFactory('OtterTreasury')
   const treasury = Treasury.attach(addresses.TREASURY_ADDRESS)
 
-  const MaticBondDepository = await ethers.getContractFactory(
-    'OtterMaticBondDepository'
-  )
-  const bond = MaticBondDepository.attach(
-    '0xf57Fb38f57D2a4Fca0ee074A3F3b4e5C570959E4'
-  )
+  let MaticBondDepository = await ethers.getContractFactory( 'OtterMaticBondDepository')
+  let bond = MaticBondDepository.attach('0x53E4DAFF2073f848DC3F7a8D7CC95b3607212A73')
   // const bond = await MaticBondDepository.deploy(
   //   addresses.CLAM_ADDRESS,
   //   addresses.sCLAM_ADDRESS,
