@@ -1,7 +1,7 @@
 const { ethers } = require('hardhat')
 const { ContractFactory } = require('ethers')
 const { expect } = require('chai')
-const { toClamAmount } = require('./helper')
+const { toClamAmount } = require('./helpers/unit')
 const UniswapV2FactoryJson = require('@uniswap/v2-core/build/UniswapV2Factory.json')
 const UniswapV2PairJson = require('@uniswap/v2-core/build/UniswapV2Pair.json')
 const UniswapV2RouterJson = require('@uniswap/v2-periphery/build/UniswapV2Router02.json')
