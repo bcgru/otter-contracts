@@ -2,7 +2,7 @@ const { ethers, timeAndMine } = require('hardhat')
 const { expect } = require('chai')
 const { BigNumber } = require('@ethersproject/bignumber')
 
-describe('Staking', () => {
+describe('Staking', function () {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -24,7 +24,6 @@ describe('Staking', () => {
   let // Used as default deployer for contracts, asks as owner of contracts.
     deployer,
     // Used as the default user for deposits and trade. Intended to be the default regular user.
-    depositor,
     clam,
     sClam,
     dai,
@@ -34,8 +33,8 @@ describe('Staking', () => {
     stakingHelper,
     firstEpochTime
 
-  beforeEach(async () => {
-    ;[deployer, depositor] = await ethers.getSigners()
+  beforeEach(async function () {
+    deployer = await ethers.getSigner()
 
     firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
 
@@ -115,8 +114,8 @@ describe('Staking', () => {
     )
   })
 
-  describe('treasury deposit', () => {
-    it('should get CLAM', async () => {
+  describe('treasury deposit', function () {
+    it('should get CLAM', async function () {
       await expect(() =>
         treasury.deposit(
           BigNumber.from(100 * 10000).mul(BigNumber.from(10).pow(18)),
@@ -131,8 +130,8 @@ describe('Staking', () => {
     })
   })
 
-  describe('stake', () => {
-    it('should get equally sClam tokens', async () => {
+  describe('stake', function () {
+    it('should get equally sClam tokens', async function () {
       await treasury.deposit(
         BigNumber.from(100 * 10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -152,8 +151,8 @@ describe('Staking', () => {
     })
   })
 
-  describe('rebase', () => {
-    it('distribute 0 for first block', async () => {
+  describe('rebase', function () {
+    it('distribute 0 for first block', async function () {
       await treasury.deposit(
         BigNumber.from(100 * 10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -174,7 +173,7 @@ describe('Staking', () => {
       expect(await sClam.index()).to.eq('1000000000')
     })
 
-    it('should rebase after epoch end', async () => {
+    it('should rebase after epoch end', async function () {
       await treasury.deposit(
         BigNumber.from(100 * 10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -208,7 +207,7 @@ describe('Staking', () => {
       expect(await sClam.index()).to.eq('8500000000')
     })
 
-    it('should not rebase before epoch end', async () => {
+    it('should not rebase before epoch end', async function () {
       await treasury.deposit(
         BigNumber.from(100 * 10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -243,7 +242,7 @@ describe('Staking', () => {
       expect(distribute).to.eq('750000000000')
     })
 
-    it('should not receive reward', async () => {
+    it('should not receive reward', async function () {
       await treasury.deposit(
         BigNumber.from(100 * 10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -292,8 +291,8 @@ describe('Staking', () => {
     })
   })
 
-  describe('warmup', () => {
-    beforeEach(async () => {
+  describe('warmup', function () {
+    beforeEach(async function () {
       await treasury.deposit(
         BigNumber.from(100 * 10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -301,14 +300,14 @@ describe('Staking', () => {
       )
     })
 
-    it('in stay in warmup after 1 epoch', async () => {
+    it('in stay in warmup after 1 epoch', async function () {
       await staking.setWarmup(2)
 
       await expect(() =>
         stakingHelper.stake(100 * 1e9, deployer.address)
       ).to.changeTokenBalance(sClam, deployer, 0)
 
-      const [deposit, gons, expiry, lock] = await staking.warmupInfo(
+      const [deposit, _, expiry, lock] = await staking.warmupInfo(
         deployer.address
       )
       expect(deposit).to.eq(100 * 1e9)
@@ -332,14 +331,14 @@ describe('Staking', () => {
       )
     })
 
-    it('should be able to forfeit without reward', async () => {
+    it('should be able to forfeit without reward', async function () {
       await staking.setWarmup(2)
 
       await expect(() =>
         stakingHelper.stake(100 * 1e9, deployer.address)
       ).to.changeTokenBalance(sClam, deployer, 0)
 
-      const [deposit, gons, expiry, lock] = await staking.warmupInfo(
+      const [deposit, _, expiry, lock] = await staking.warmupInfo(
         deployer.address
       )
       expect(deposit).to.eq(100 * 1e9)

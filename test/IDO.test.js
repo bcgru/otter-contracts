@@ -1,8 +1,10 @@
 const { ethers, timeAndMine } = require('hardhat')
 const { expect } = require('chai')
+const { deployUniswap } = require('./helpers/uniswap')
 const { BigNumber } = require('@ethersproject/bignumber')
 
-describe.skip('IDO', () => {
+// eslint-disable-next-line mocha/no-skipped-tests
+describe.skip('IDO', function () {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -26,14 +28,17 @@ describe.skip('IDO', () => {
     // Used as the default user for deposits and trade. Intended to be the default regular user.
     buyer1,
     clam,
+    sClam,
     dai,
     treasury,
     uniFactory,
     pairAddress,
-    lp,
+    firstEpochTime,
+    staking,
+    stakingDistributor,
     ido
 
-  beforeEach(async () => {
+  beforeEach(async function () {
     ;[deployer, buyer1] = await ethers.getSigners()
 
     firstEpochTime = (await deployer.provider.getBlock()).timestamp + 100
@@ -48,16 +53,10 @@ describe.skip('IDO', () => {
     const DAI = await ethers.getContractFactory('DAI')
     dai = await DAI.deploy(0)
 
-    const UniswapV2FactoryContract = await ethers.getContractFactory(
-      'UniswapV2Factory'
-    )
-    uniFactory = await UniswapV2FactoryContract.deploy(deployer.address)
+    uniFactory = (await deployUniswap(deployer)).factory
     await uniFactory.createPair(clam.address, dai.address)
 
     pairAddress = await uniFactory.getPair(clam.address, dai.address)
-
-    const UniswapV2Pair = await ethers.getContractFactory('UniswapV2Pair')
-    lp = UniswapV2Pair.attach(pairAddress)
 
     const BondingCalculator = await ethers.getContractFactory(
       'OtterBondingCalculator'
@@ -91,10 +90,6 @@ describe.skip('IDO', () => {
       firstEpochNumber,
       firstEpochTime
     )
-
-    // Deploy staking helper
-    const StakingHelper = await ethers.getContractFactory('OtterStakingHelper')
-    stakingHelper = await StakingHelper.deploy(staking.address, clam.address)
 
     const StakingWarmup = await ethers.getContractFactory('OtterStakingWarmup')
     const stakingWarmup = await StakingWarmup.deploy(
@@ -148,8 +143,8 @@ describe.skip('IDO', () => {
     )
   })
 
-  describe('whiteListed', () => {
-    it('should be blocked by whitelist', async () => {
+  describe('whiteListed', function () {
+    it('should be blocked by whitelist', async function () {
       await ido.initialize(
         BigNumber.from(200000).mul(
           BigNumber.from(10).pow(await clam.decimals())
@@ -163,18 +158,18 @@ describe.skip('IDO', () => {
         ido.purchaseCLAM(BigNumber.from(1000).mul(BigNumber.from(10).pow(18)))
       ).to.be.revertedWith('Not whitelisted')
     })
-    it('should return false', async () => {
+    it('should return false', async function () {
       expect(await ido.whiteListed(deployer.address)).to.be.false
     })
-    it('should return true', async () => {
+    it('should return true', async function () {
       const whitelist = [deployer.address]
       await ido.whiteListBuyers(whitelist)
       expect(await ido.whiteListed(deployer.address)).to.be.true
     })
   })
 
-  describe('purchase', () => {
-    beforeEach(async () => {
+  describe('purchase', function () {
+    beforeEach(async function () {
       const whitelist = [deployer.address, buyer1.address]
       await ido.whiteListBuyers(whitelist)
       await ido.initialize(
@@ -187,7 +182,7 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('able to purchase first time', async () => {
+    it('able to purchase first time', async function () {
       const maxAmountCLAM = await ido.getAllotmentPerBuyer()
       const amountDAI = maxAmountCLAM.div(1e9).mul(await ido.salePrice())
       await expect(() => ido.purchaseCLAM(amountDAI)).to.changeTokenBalance(
@@ -202,7 +197,7 @@ describe.skip('IDO', () => {
       expect(await dai.balanceOf(ido.address)).to.eq(amountDAI)
     })
 
-    it('failed to purchase second time', async () => {
+    it('failed to purchase second time', async function () {
       await ido.purchaseCLAM(
         BigNumber.from(1000).mul(BigNumber.from(10).pow(18))
       )
@@ -211,7 +206,7 @@ describe.skip('IDO', () => {
       ).to.be.revertedWith('Already participated')
     })
 
-    it('able to purchase more for others', async () => {
+    it('able to purchase more for others', async function () {
       let buyerIdo = ido.connect(buyer1)
       await buyerIdo.purchaseCLAM(
         BigNumber.from(1000).mul(BigNumber.from(10).pow(18))
@@ -231,8 +226,8 @@ describe.skip('IDO', () => {
     })
   })
 
-  describe('disable white list', () => {
-    beforeEach(async () => {
+  describe('disable white list', function () {
+    beforeEach(async function () {
       await ido.initialize(
         BigNumber.from(201).mul(BigNumber.from(10).pow(9)),
         BigNumber.from(5).mul(BigNumber.from(10).pow(18)),
@@ -242,7 +237,7 @@ describe.skip('IDO', () => {
       await ido.disableWhiteList()
     })
 
-    it('should able to purchase', async () => {
+    it('should able to purchase', async function () {
       const maxAmountCLAM = await ido.getAllotmentPerBuyer()
       const amountDAI = maxAmountCLAM.div(1e9).mul(await ido.salePrice())
       await expect(() => ido.purchaseCLAM(amountDAI)).to.changeTokenBalance(
@@ -273,7 +268,7 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('should failed to purchase more then total amount', async () => {
+    it('should failed to purchase more then total amount', async function () {
       const maxAmountCLAM = await ido.getAllotmentPerBuyer()
       const amountDAI = maxAmountCLAM.div(1e9).mul(await ido.salePrice())
       await expect(() => ido.purchaseCLAM(amountDAI)).to.changeTokenBalance(
@@ -297,8 +292,8 @@ describe.skip('IDO', () => {
     })
   })
 
-  describe('finalize', () => {
-    beforeEach(async () => {
+  describe('finalize', function () {
+    beforeEach(async function () {
       const whitelist = [deployer.address, buyer1.address]
       await staking.setWarmup(1)
       await ido.whiteListBuyers(whitelist)
@@ -312,7 +307,7 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('should finalize', async () => {
+    it('should finalize', async function () {
       await dai.transfer(
         buyer1.address,
         BigNumber.from(500000).mul(BigNumber.from(10).pow(18))
@@ -372,7 +367,7 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('able to finalize after epoch 1 start', async () => {
+    it('able to finalize after epoch 1 start', async function () {
       await dai.transfer(
         buyer1.address,
         BigNumber.from(500000).mul(BigNumber.from(10).pow(18))
@@ -433,7 +428,7 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('should have rewards claim after second period', async () => {
+    it('should have rewards claim after second period', async function () {
       await dai.transfer(
         buyer1.address,
         BigNumber.from(500000).mul(BigNumber.from(10).pow(18))
@@ -492,13 +487,13 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('should failed with non-owner', async () => {
+    it('should failed with non-owner', async function () {
       await expect(
         ido.connect(buyer1).finalize(buyer1.address)
       ).to.be.revertedWith('Ownable: caller is not the owner')
     })
 
-    it('should failed claim 2 times', async () => {
+    it('should failed claim 2 times', async function () {
       await dai.transfer(
         buyer1.address,
         BigNumber.from(500000).mul(BigNumber.from(10).pow(18))
@@ -526,12 +521,14 @@ describe.skip('IDO', () => {
     })
   })
 
-  describe.skip('1000 buyer', () => {
-    const totalAmount = BigNumber.from(200000).mul(BigNumber.from(10).pow(9))
-    const pricePerClam = BigNumber.from(5).mul(BigNumber.from(10).pow(18))
-    beforeEach(async () => {})
+  describe('1000 buyer', function () {
+    let totalAmount, pricePerClam
+    beforeEach(function () {
+      totalAmount = BigNumber.from(200000).mul(BigNumber.from(10).pow(9))
+      pricePerClam = BigNumber.from(5).mul(BigNumber.from(10).pow(18))
+    })
 
-    it('buy all clam and finalize', async () => {
+    it('buy all clam and finalize', async function () {
       const wallets = []
       const totalBuyer = 999
       for (let i = 0; i < totalBuyer; i++) {
@@ -611,8 +608,8 @@ describe.skip('IDO', () => {
     })
   })
 
-  describe('cancel', () => {
-    beforeEach(async () => {
+  describe('cancel', function () {
+    beforeEach(async function () {
       const whitelist = [deployer.address, buyer1.address]
       await ido.whiteListBuyers(whitelist)
       await ido.initialize(
@@ -625,13 +622,13 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('should failed with non-owner', async () => {
+    it('should failed with non-owner', async function () {
       await expect(ido.connect(buyer1).cancel()).to.be.revertedWith(
         'Ownable: caller is not the owner'
       )
     })
 
-    it('should return funds to buyer', async () => {
+    it('should return funds to buyer', async function () {
       await dai.transfer(
         buyer1.address,
         BigNumber.from(500000).mul(BigNumber.from(10).pow(18))
@@ -659,13 +656,13 @@ describe.skip('IDO', () => {
     })
   })
 
-  describe('start', () => {
-    beforeEach(async () => {
+  describe('start', function () {
+    beforeEach(async function () {
       const whitelist = [deployer.address, buyer1.address]
       await ido.whiteListBuyers(whitelist)
     })
 
-    it('should failed to purchase if not initialized', async () => {
+    it('should failed to purchase if not initialized', async function () {
       const maxAmountCLAM = await ido.getAllotmentPerBuyer()
       const amountDAI = maxAmountCLAM.div(1e9).mul(await ido.salePrice())
       await expect(ido.purchaseCLAM(amountDAI)).to.be.revertedWith(
@@ -673,7 +670,7 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('should failed to purchase before start', async () => {
+    it('should failed to purchase before start', async function () {
       await ido.initialize(
         BigNumber.from(200000).mul(
           BigNumber.from(10).pow(await clam.decimals())
@@ -689,7 +686,7 @@ describe.skip('IDO', () => {
       )
     })
 
-    it('should able to purchase after start', async () => {
+    it('should able to purchase after start', async function () {
       await ido.initialize(
         BigNumber.from(200000).mul(
           BigNumber.from(10).pow(await clam.decimals())

@@ -6,32 +6,18 @@ const UniswapV2FactoryJson = require('@uniswap/v2-core/build/UniswapV2Factory.js
 const UniswapV2PairJson = require('@uniswap/v2-core/build/UniswapV2Pair.json')
 const UniswapV2RouterJson = require('@uniswap/v2-periphery/build/UniswapV2Router02.json')
 
-describe.skip('ClamTokenMigrator', () => {
+describe.skip('ClamTokenMigrator', function () {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
-  // What epoch will be first epoch
-  const firstEpochNumber = '1'
-
-  // How many seconds are in each epoch
-  const epochLength = 86400 / 3
-
-  // Initial reward rate for epoch
-  const initialRewardRate = '3000'
-
   // Ethereum 0 address, used when toggling changes in treasury
   const zeroAddress = '0x0000000000000000000000000000000000000000'
-
-  // Initial staking index
-  const initialIndex = '1000000000'
 
   let deployer,
     // Used as the default user for deposits and trade. Intended to be the default regular user.
     depositor,
     clam,
     clam2,
-    sClam,
-    sClam2,
     dai,
     lp,
     lp2,
@@ -39,16 +25,10 @@ describe.skip('ClamTokenMigrator', () => {
     quickRouter,
     treasury,
     treasury2,
-    stakingDistributor,
-    staking,
-    stakingHelper,
-    firstEpochTime,
     migrator
 
-  beforeEach(async () => {
-    ;[deployer, depositor] = await ethers.getSigners()
-
-    firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
+  beforeEach(async function () {
+    deployer = await ethers.getSigner()
 
     const DAI = await ethers.getContractFactory('DAI')
     dai = await DAI.deploy(0)
@@ -57,9 +37,6 @@ describe.skip('ClamTokenMigrator', () => {
     clam = await CLAM.deploy()
     const CLAM2 = await ethers.getContractFactory('OtterClamERC20V2')
     clam2 = await CLAM2.deploy()
-
-    const StakedCLAM = await ethers.getContractFactory('StakedOtterClamERC20')
-    sClam = await StakedCLAM.deploy()
 
     const UniswapV2FactoryContract = ContractFactory.fromSolidity(
       UniswapV2FactoryJson,
@@ -198,8 +175,8 @@ describe.skip('ClamTokenMigrator', () => {
     )
   })
 
-  describe('migrate process', () => {
-    it('should deposit excess dai to the new treasury', async () => {
+  describe('migrate process', function () {
+    it('should deposit excess dai to the new treasury', async function () {
       const oldDaiReserve = ethers.utils.parseEther('905126.540522624806525292')
       const oldTotalSupply = ethers.BigNumber.from('387634700303642')
       const profit = oldDaiReserve.div(1e9).sub(oldTotalSupply)
