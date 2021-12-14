@@ -3,7 +3,7 @@ const { expect } = require('chai')
 const { parseEther, parseUnits } = require('@ethersproject/units')
 const { deployUniswap, getPair } = require('./helpers/uniswap')
 
-describe.only('OtterMaticBondLPDepository', () => {
+describe('OtterMaticBondLPDepository', () => {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
