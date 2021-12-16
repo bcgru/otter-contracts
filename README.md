@@ -8,10 +8,10 @@ Required:
 
 
 Local Setup Steps:
-1. git clone https://github.com/OlympusDAO/olympus-contracts.git
-1. Install dependencies: `npm install`
+1. git clone https://github.com/OtterClam/otter-contracts
+1. Install dependencies: `yarn install`
     - Installs [Hardhat](https://hardhat.org/getting-started/) & [OpenZepplin](https://docs.openzeppelin.com/contracts/4.x/) dependencies
-1. Compile Solidity: `npm run compile`
+1. Compile Solidity: `yarn compile`
 1. **_TODO_**: How to do local deployments of the contracts.
 
 
@@ -88,3 +88,8 @@ All together, returning funds should look something like this:
 ```
 treasury.deposit( address(this), amountToReturn, MAI, treasury.valueOfToken( MAI, amountToReturn ) );
 ```
+
+## Audits
+[The first audit by SlowMist](https://www.slowmist.com/en/security-audit-certificate.html?id=4d43b0eb547aa83dc2ff5bef71f99916e33b669a5f30572f1826d7e8220265c2) was completed on the 15th of December 2021. It covered all deployed smart contracts at the time.
+
+You can download the detail reports [here](./docs/SlowMist_Audit_ Report-OtterFinance.pdf)
