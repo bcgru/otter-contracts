@@ -7,7 +7,7 @@ import "./libraries/SafeERC20.sol";
 import "./libraries/Address.sol";
 import "./types/ERC20.sol";
 
-contract PEARL is ERC20 {
+contract OtterPearlERC20 is ERC20 {
     using SafeERC20 for ERC20;
     using Address for address;
     using SafeMath for uint;
@@ -27,7 +27,7 @@ contract PEARL is ERC20 {
     function wrap( uint _amount ) external returns ( uint ) {
         IERC20( sCLAM ).transferFrom( msg.sender, address(this), _amount );
 
-        uint value = sCLAMTowCLAM( _amount );
+        uint value = sCLAMToPEARL( _amount );
         _mint( msg.sender, value );
         return value;
     }
@@ -40,26 +40,26 @@ contract PEARL is ERC20 {
     function unwrap( uint _amount ) external returns ( uint ) {
         _burn( msg.sender, _amount );
 
-        uint value = wCLAMTosCLAM( _amount );
+        uint value = pearlTosCLAM( _amount );
         IERC20( sCLAM ).transfer( msg.sender, value );
         return value;
     }
 
     /**
-        @notice converts wCLAM amount to sCLAM
+        @notice converts PEARL amount to sCLAM
         @param _amount uint
         @return uint
      */
-    function wCLAMTosCLAM( uint _amount ) public view returns ( uint ) {
+    function pearlTosCLAM( uint _amount ) public view returns ( uint ) {
         return _amount.mul( IsCLAM( sCLAM ).index() ).div( 10 ** decimals() );
     }
 
     /**
-        @notice converts sCLAM amount to wCLAM
+        @notice converts sCLAM amount to PEARL
         @param _amount uint
         @return uint
      */
-    function sCLAMTowCLAM( uint _amount ) public view returns ( uint ) {
+    function sCLAMToPEARL( uint _amount ) public view returns ( uint ) {
         return _amount.mul( 10 ** decimals() ).div( IsCLAM( sCLAM ).index() );
     }
 

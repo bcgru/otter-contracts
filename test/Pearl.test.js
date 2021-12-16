@@ -49,7 +49,7 @@ describe('Pearl', function () {
     const StakedCLAM = await ethers.getContractFactory('StakedOtterClamERC20V2')
     sClam = await StakedCLAM.deploy()
 
-    const PEARL = await ethers.getContractFactory('PEARL')
+    const PEARL = await ethers.getContractFactory('OtterPearlERC20')
     pearl = await PEARL.deploy(sClam.address)
 
     const Treasury = await ethers.getContractFactory('OtterTreasury')
