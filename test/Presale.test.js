@@ -2,7 +2,7 @@ const { ethers } = require('hardhat')
 const { expect } = require('chai')
 const { BigNumber } = require('@ethersproject/bignumber')
 
-describe('Presale', () => {
+describe('Presale', function () {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -12,17 +12,14 @@ describe('Presale', () => {
   let // Used as default deployer for contracts, asks as owner of contracts.
     deployer,
     // Used as the default user for deposits and trade. Intended to be the default regular user.
-    depositor,
     clam,
     pClam,
     exercisePreClam,
     dai,
     treasury
 
-  beforeEach(async () => {
-    ;[deployer, depositor] = await ethers.getSigners()
-
-    firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
+  beforeEach(async function () {
+    deployer = await ethers.getSigner()
 
     const CLAM = await ethers.getContractFactory('OtterClamERC20')
     clam = await CLAM.deploy()
@@ -89,8 +86,8 @@ describe('Presale', () => {
     )
   })
 
-  describe('exercise', () => {
-    it('should get reverted', async () => {
+  describe('exercise', function () {
+    it('should get reverted', async function () {
       await exercisePreClam.setTerms(
         deployer.address,
         BigNumber.from(30000).mul(BigNumber.from(10).pow(18)),
@@ -104,7 +101,7 @@ describe('Presale', () => {
       ).to.be.revertedWith('Not enough vested')
     })
 
-    it('should get clam', async () => {
+    it('should get clam', async function () {
       await exercisePreClam.setTerms(
         deployer.address,
         BigNumber.from(30000).mul(BigNumber.from(10).pow(18)),

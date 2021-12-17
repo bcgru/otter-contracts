@@ -3,7 +3,7 @@ const { expect } = require('chai')
 const { parseEther, parseUnits } = require('@ethersproject/units')
 const { deployUniswap, getPair } = require('./helpers/uniswap')
 
-describe.only('OtterMaticBondLPDepository', () => {
+describe('OtterMaticBondLPDepository', function () {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -37,7 +37,7 @@ describe.only('OtterMaticBondLPDepository', () => {
     lp,
     uniRouter
 
-  beforeEach(async () => {
+  beforeEach(async function () {
     ;[deployer, depositor, dao] = await ethers.getSigners()
 
     firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
@@ -155,8 +155,8 @@ describe.only('OtterMaticBondLPDepository', () => {
     await clam.transfer(depositor.address, parseUnits('50', 9))
   })
 
-  describe('adjust', () => {
-    it('should able to adjust with bcv <= 40', async () => {
+  describe('adjust', function () {
+    it('should able to adjust with bcv <= 40', async function () {
       const bcv = 38
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -180,7 +180,7 @@ describe.only('OtterMaticBondLPDepository', () => {
       expect(adjustment[3]).to.eq(0)
     })
 
-    it('should failed to adjust with too large increment', async () => {
+    it('should failed to adjust with too large increment', async function () {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -201,7 +201,7 @@ describe.only('OtterMaticBondLPDepository', () => {
       )
     })
 
-    it('should be able to adjust with normal increment', async () => {
+    it('should be able to adjust with normal increment', async function () {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -226,8 +226,8 @@ describe.only('OtterMaticBondLPDepository', () => {
     })
   })
 
-  describe('payout', () => {
-    it('should return correct payout', async () => {
+  describe('payout', function () {
+    it('should return correct payout', async function () {
       // $50
       await uniRouter.addLiquidity(
         dai.address,
@@ -264,8 +264,8 @@ describe.only('OtterMaticBondLPDepository', () => {
     })
   })
 
-  describe('priceInUSD', () => {
-    it('should return correct price in usd', async () => {
+  describe('priceInUSD', function () {
+    it('should return correct price in usd', async function () {
       // $50
       await uniRouter.addLiquidity(
         dai.address,
@@ -300,8 +300,8 @@ describe.only('OtterMaticBondLPDepository', () => {
     })
   })
 
-  describe('deposit', () => {
-    beforeEach(async () => {
+  describe('deposit', function () {
+    beforeEach(async function () {
       // $50
       await uniRouter.addLiquidity(
         dai.address,
@@ -316,7 +316,7 @@ describe.only('OtterMaticBondLPDepository', () => {
       await oracle.setRoundData(0, parseUnits('2.2', 8), 0, 1, 0)
     })
 
-    it('failed to redeem not fully vested bond', async () => {
+    it('failed to redeem not fully vested bond', async function () {
       const bcv = 300
       const bondVestingLength = 10
       const minBondPrice = 150
@@ -349,7 +349,7 @@ describe.only('OtterMaticBondLPDepository', () => {
       )
     })
 
-    it('should redeem sCLAM when vested fully', async () => {
+    it('should redeem sCLAM when vested fully', async function () {
       const bcv = 300
       const bondVestingLength = 15
       const minBondPrice = 400 // bond price = 4 MATIC
@@ -378,7 +378,7 @@ describe.only('OtterMaticBondLPDepository', () => {
       ).to.changeTokenBalance(sClam, deployer, parseUnits('160.532115752', 9))
     })
 
-    it('should deploy twice and redeem sCLAM when vested fully', async () => {
+    it('should deploy twice and redeem sCLAM when vested fully', async function () {
       await uniRouter
         .connect(depositor)
         .addLiquidity(

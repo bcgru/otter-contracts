@@ -3,7 +3,7 @@ const { expect } = require('chai')
 const { BigNumber } = require('@ethersproject/bignumber')
 const { formatUnits, formatEther } = require('@ethersproject/units')
 
-describe('Bonding', () => {
+describe('Bonding', function () {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -24,7 +24,6 @@ describe('Bonding', () => {
   let // Used as default deployer for contracts, asks as owner of contracts.
     deployer,
     // Used as the default user for deposits and trade. Intended to be the default regular user.
-    depositor,
     clam,
     sClam,
     dai,
@@ -34,8 +33,8 @@ describe('Bonding', () => {
     daiBond,
     firstEpochTime
 
-  beforeEach(async () => {
-    ;[deployer, depositor] = await ethers.getSigners()
+  beforeEach(async function () {
+    deployer = await ethers.getSigner()
 
     firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
 
@@ -113,8 +112,8 @@ describe('Bonding', () => {
     )
   })
 
-  describe('adjust', () => {
-    it('should able to adjust with bcv <= 40', async () => {
+  describe('adjust', function () {
+    it('should able to adjust with bcv <= 40', async function () {
       const bcv = 38
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -140,7 +139,7 @@ describe('Bonding', () => {
       expect(adjustment[3]).to.eq(0)
     })
 
-    it('should failed to adjust with too large increment', async () => {
+    it('should failed to adjust with too large increment', async function () {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -163,7 +162,7 @@ describe('Bonding', () => {
       )
     })
 
-    it('should be able to adjust with normal increment', async () => {
+    it('should be able to adjust with normal increment', async function () {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -190,8 +189,8 @@ describe('Bonding', () => {
     })
   })
 
-  describe('deposit', () => {
-    it('should get vested fully', async () => {
+  describe('deposit', function () {
+    it('should get vested fully', async function () {
       await treasury.deposit(
         BigNumber.from(10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -255,7 +254,7 @@ describe('Bonding', () => {
       ).to.changeTokenBalance(clam, deployer, '30834236186')
     })
 
-    it('should get vested partially', async () => {
+    it('should get vested partially', async function () {
       await treasury.deposit(
         BigNumber.from(10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -300,7 +299,7 @@ describe('Bonding', () => {
       ).to.changeTokenBalance(clam, deployer, totalClam - totalClam.div(5))
     })
 
-    it('should staked directly', async () => {
+    it('should staked directly', async function () {
       await treasury.deposit(
         BigNumber.from(10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
