@@ -5,10 +5,11 @@ const { ContractFactory } = require('ethers')
 const UniswapV2FactoryJson = require('@uniswap/v2-core/build/UniswapV2Factory.json')
 const UniswapV2PairJson = require('@uniswap/v2-core/build/UniswapV2Pair.json')
 
-describe('OtterBondingCalculator', function () {
+describe('OtterBondingCalculator', () => {
   let // Used as default deployer for contracts, asks as owner of contracts.
     deployer,
     // Used as the default user for deposits and trade. Intended to be the default regular user.
+    depositor,
     CLAM,
     clam,
     DAI,
@@ -21,8 +22,8 @@ describe('OtterBondingCalculator', function () {
     BondingCalcContract,
     bondingCalc
 
-  beforeEach(async function () {
-    deployer = await ethers.getSigner()
+  beforeEach(async () => {
+    ;[deployer, depositor] = await ethers.getSigners()
 
     CLAM = await ethers.getContractFactory('OtterClamERC20')
     clam = await CLAM.connect(deployer).deploy()
@@ -52,8 +53,8 @@ describe('OtterBondingCalculator', function () {
     )
   })
 
-  describe('getKValue', function () {
-    it('should return x*y', async function () {
+  describe('getKValue', () => {
+    it('should return x*y', async () => {
       const clamAmount = BigNumber.from(100).mul(BigNumber.from(10).pow(9))
       const daiAmount = BigNumber.from(400).mul(BigNumber.from(10).pow(18))
       await clam.mint(deployer.address, clamAmount)
@@ -71,8 +72,8 @@ describe('OtterBondingCalculator', function () {
     })
   })
 
-  describe('getTotalValue', function () {
-    it('should return total value in USD', async function () {
+  describe('getTotalValue', () => {
+    it('should return total value in USD', async () => {
       const clamAmount = BigNumber.from(100).mul(BigNumber.from(10).pow(9))
       const daiAmount = BigNumber.from(400).mul(BigNumber.from(10).pow(18))
       await clam.mint(deployer.address, clamAmount)

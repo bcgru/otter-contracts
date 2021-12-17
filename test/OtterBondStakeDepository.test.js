@@ -7,7 +7,7 @@ const {
   parseUnits,
 } = require('@ethersproject/units')
 
-describe('OtterBondStakeDepository', function () {
+describe('OtterBondStakeDepository', () => {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -38,7 +38,7 @@ describe('OtterBondStakeDepository', function () {
     daiBond,
     firstEpochTime
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     ;[deployer, depositor, dao] = await ethers.getSigners()
 
     firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
@@ -128,8 +128,8 @@ describe('OtterBondStakeDepository', function () {
     await dai.transfer(depositor.address, parseEther('10000'))
   })
 
-  describe('adjust', function () {
-    it('should able to adjust with bcv <= 40', async function () {
+  describe('adjust', () => {
+    it('should able to adjust with bcv <= 40', async () => {
       const bcv = 38
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -155,7 +155,7 @@ describe('OtterBondStakeDepository', function () {
       expect(adjustment[3]).to.eq(0)
     })
 
-    it('should failed to adjust with too large increment', async function () {
+    it('should failed to adjust with too large increment', async () => {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -178,7 +178,7 @@ describe('OtterBondStakeDepository', function () {
       )
     })
 
-    it('should be able to adjust with normal increment', async function () {
+    it('should be able to adjust with normal increment', async () => {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -205,8 +205,8 @@ describe('OtterBondStakeDepository', function () {
     })
   })
 
-  describe('deposit', function () {
-    it('failed to redeem not fully vested bond', async function () {
+  describe('deposit', () => {
+    it('failed to redeem not fully vested bond', async () => {
       await treasury.deposit(
         parseEther('10000'),
         dai.address,
@@ -246,7 +246,7 @@ describe('OtterBondStakeDepository', function () {
       )
     })
 
-    it('should redeem sCLAM when vested fully', async function () {
+    it('should redeem sCLAM when vested fully', async () => {
       await treasury.deposit(
         parseEther('10000'),
         dai.address,
@@ -284,7 +284,7 @@ describe('OtterBondStakeDepository', function () {
       ).to.changeTokenBalance(sClam, deployer, parseUnits('265', 9))
     })
 
-    it('should deploy twice and redeem sCLAM when vested fully', async function () {
+    it('should deploy twice and redeem sCLAM when vested fully', async () => {
       await treasury.deposit(
         parseEther('100000'),
         dai.address,
@@ -314,9 +314,7 @@ describe('OtterBondStakeDepository', function () {
         daiBond.deposit(parseEther('50'), largeApproval, deployer.address)
       ).to.changeTokenBalance(clam, dao, parseUnits('1', 9))
       await expect(() =>
-        daiBond
-          .connect(depositor)
-          .deposit(parseEther('500'), largeApproval, depositor.address)
+        daiBond.connect(depositor).deposit(parseEther('500'), largeApproval, depositor.address)
       ).to.changeTokenBalance(clam, dao, parseUnits('10', 9))
 
       await timeAndMine.setTimeIncrease(86400)

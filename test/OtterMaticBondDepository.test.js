@@ -1,8 +1,12 @@
 const { ethers, timeAndMine } = require('hardhat')
 const { expect } = require('chai')
-const { formatUnits, parseEther, parseUnits } = require('@ethersproject/units')
+const {
+  formatUnits,
+  parseEther,
+  parseUnits,
+} = require('@ethersproject/units')
 
-describe('OtterMaticBondDepository', function () {
+describe('OtterMaticBondDepository', () => {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -34,7 +38,7 @@ describe('OtterMaticBondDepository', function () {
     firstEpochTime,
     oracle
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     ;[deployer, depositor, dao] = await ethers.getSigners()
 
     firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
@@ -128,8 +132,8 @@ describe('OtterMaticBondDepository', function () {
     await dai.transfer(depositor.address, parseEther('10000'))
   })
 
-  describe('adjust', function () {
-    it('should able to adjust with bcv <= 40', async function () {
+  describe('adjust', () => {
+    it('should able to adjust with bcv <= 40', async () => {
       const bcv = 38
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -153,7 +157,7 @@ describe('OtterMaticBondDepository', function () {
       expect(adjustment[3]).to.eq(0)
     })
 
-    it('should failed to adjust with too large increment', async function () {
+    it('should failed to adjust with too large increment', async () => {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -174,7 +178,7 @@ describe('OtterMaticBondDepository', function () {
       )
     })
 
-    it('should be able to adjust with normal increment', async function () {
+    it('should be able to adjust with normal increment', async () => {
       const bcv = 100
       const bondVestingLength = 10
       const minBondPrice = 400 // bond price = $4
@@ -199,8 +203,8 @@ describe('OtterMaticBondDepository', function () {
     })
   })
 
-  describe('deposit', function () {
-    it('failed to redeem not fully vested bond', async function () {
+  describe('deposit', () => {
+    it('failed to redeem not fully vested bond', async () => {
       await treasury.deposit(
         parseEther('10000'),
         dai.address,
@@ -235,7 +239,7 @@ describe('OtterMaticBondDepository', function () {
       )
     })
 
-    it('should redeem sCLAM when vested fully', async function () {
+    it('should redeem sCLAM when vested fully', async () => {
       await treasury.deposit(
         parseEther('10000'),
         dai.address,
@@ -273,7 +277,7 @@ describe('OtterMaticBondDepository', function () {
       ).to.changeTokenBalance(sClam, deployer, parseUnits('263.75', 9))
     })
 
-    it('should deploy twice and redeem sCLAM when vested fully', async function () {
+    it('should deploy twice and redeem sCLAM when vested fully', async () => {
       await treasury.deposit(
         parseEther('100000'),
         dai.address,
