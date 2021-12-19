@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.7.5;
 
-import "./libraries/Ownable.sol";
+import "./interfaces/IOtterTreasury.sol";
+
+import "./types/Ownable.sol";
+import "./types/ERC20.sol";
+
 import "./libraries/SafeMath.sol";
-import "./libraries/ERC20.sol";
+import "./libraries/SafeERC20.sol";
 
 interface ICLAMERC20 {
     function burnFrom(address account_, uint256 amount_) external;
@@ -13,7 +17,7 @@ interface IBondCalculator {
   function valuation( address pair_, uint amount_ ) external view returns ( uint _value );
 }
 
-contract OtterTreasury is Ownable {
+contract OtterTreasury is Ownable, IOtterTreasury {
 
     using SafeMath for uint;
     using SafeERC20 for IERC20;
@@ -106,7 +110,7 @@ contract OtterTreasury is Ownable {
         @param _profit uint
         @return send_ uint
      */
-    function deposit( uint _amount, address _token, uint _profit ) external returns ( uint send_ ) {
+    function deposit( uint _amount, address _token, uint _profit ) external override returns ( uint send_ ) {
         require( isReserveToken[ _token ] || isLiquidityToken[ _token ], "Not accepted" );
         IERC20( _token ).safeTransferFrom( msg.sender, address(this), _amount );
 
@@ -132,7 +136,7 @@ contract OtterTreasury is Ownable {
         @param _amount uint
         @param _token address
      */
-    function withdraw( uint _amount, address _token ) external {
+    function withdraw( uint _amount, address _token ) external override {
         require( isReserveToken[ _token ], "Not accepted" ); // Only reserves can be used for redemptions
         require( isReserveSpender[ msg.sender ] == true, "Not approved" );
 
@@ -214,7 +218,7 @@ contract OtterTreasury is Ownable {
         @param _token address
         @param _amount uint
      */
-    function manage( address _token, uint _amount ) external {
+    function manage( address _token, uint _amount ) external override {
         if( isLiquidityToken[ _token ] ) {
             require( isLiquidityManager[ msg.sender ], "Not approved" );
         } else {
@@ -235,7 +239,7 @@ contract OtterTreasury is Ownable {
     /**
         @notice send epoch reward to staking contract
      */
-    function mintRewards( address _recipient, uint _amount ) external {
+    function mintRewards( address _recipient, uint _amount ) external override {
         require( isRewardManager[ msg.sender ], "Not approved" );
         require( _amount <= excessReserves(), "Insufficient reserves" );
 
@@ -248,7 +252,7 @@ contract OtterTreasury is Ownable {
         @notice returns excess reserves not backing tokens
         @return uint
      */
-    function excessReserves() public view returns ( uint ) {
+    function excessReserves() public override view returns ( uint ) {
         return totalReserves.sub( IERC20( CLAM ).totalSupply().sub( totalDebt ) );
     }
 
@@ -279,7 +283,7 @@ contract OtterTreasury is Ownable {
         @param _amount uint
         @return value_ uint
      */
-    function valueOfToken( address _token, uint _amount ) public view returns ( uint value_ ) {
+    function valueOfToken( address _token, uint _amount ) public view override returns ( uint value_ ) {
         if ( isReserveToken[ _token ] ) {
             // convert amount to match CLAM decimals
             value_ = _amount.mul( 10 ** IERC20( CLAM ).decimals() ).div( 10 ** IERC20( _token ).decimals() );

@@ -3,7 +3,7 @@ const { expect } = require('chai')
 const { BigNumber } = require('@ethersproject/bignumber')
 const { formatUnits, formatEther } = require('@ethersproject/units')
 
-describe('Bonding', () => {
+describe('Bonding', function () {
   // Large number for approval for DAI
   const largeApproval = '100000000000000000000000000000000'
 
@@ -24,7 +24,6 @@ describe('Bonding', () => {
   let // Used as default deployer for contracts, asks as owner of contracts.
     deployer,
     // Used as the default user for deposits and trade. Intended to be the default regular user.
-    depositor,
     clam,
     sClam,
     dai,
@@ -34,8 +33,8 @@ describe('Bonding', () => {
     daiBond,
     firstEpochTime
 
-  beforeEach(async () => {
-    ;[deployer, depositor] = await ethers.getSigners()
+  beforeEach(async function () {
+    deployer = await ethers.getSigner()
 
     firstEpochTime = (await deployer.provider.getBlock()).timestamp - 100
 
@@ -100,7 +99,7 @@ describe('Bonding', () => {
     await treasury.queue('0', daiBond.address)
     await treasury.toggle('0', daiBond.address, zeroAddress)
 
-    await daiBond.setStaking(staking.address, stakingHelper.address)
+    await daiBond.setStaking(stakingHelper.address, true)
 
     await clam.approve(stakingHelper.address, largeApproval)
     await dai.approve(treasury.address, largeApproval)
@@ -113,8 +112,85 @@ describe('Bonding', () => {
     )
   })
 
-  describe('deposit', () => {
-    it('should get vested fully', async () => {
+  describe('adjust', function () {
+    it('should able to adjust with bcv <= 40', async function () {
+      const bcv = 38
+      const bondVestingLength = 10
+      const minBondPrice = 400 // bond price = $4
+      const maxBondPayout = 1000 // 1000 = 1% of CLAM total supply
+      const daoFee = 10000 // DAO fee for bond
+      const maxBondDebt = '8000000000000000'
+      const initialBondDebt = 0
+      await daiBond.initializeBondTerms(
+        bcv,
+        bondVestingLength,
+        minBondPrice,
+        maxBondPayout, // Max bond payout,
+        daoFee,
+        maxBondDebt,
+        initialBondDebt
+      )
+
+      await daiBond.setAdjustment(true, 1, 50, 0)
+      const adjustment = await daiBond.adjustment()
+      expect(adjustment[0]).to.be.true
+      expect(adjustment[1]).to.eq(1)
+      expect(adjustment[2]).to.eq(50)
+      expect(adjustment[3]).to.eq(0)
+    })
+
+    it('should failed to adjust with too large increment', async function () {
+      const bcv = 100
+      const bondVestingLength = 10
+      const minBondPrice = 400 // bond price = $4
+      const maxBondPayout = 1000 // 1000 = 1% of CLAM total supply
+      const daoFee = 10000 // DAO fee for bond
+      const maxBondDebt = '8000000000000000'
+      const initialBondDebt = 0
+      await daiBond.initializeBondTerms(
+        bcv,
+        bondVestingLength,
+        minBondPrice,
+        maxBondPayout, // Max bond payout,
+        daoFee,
+        maxBondDebt,
+        initialBondDebt
+      )
+
+      await expect(daiBond.setAdjustment(true, 3, 50, 0)).to.be.revertedWith(
+        'Increment too large'
+      )
+    })
+
+    it('should be able to adjust with normal increment', async function () {
+      const bcv = 100
+      const bondVestingLength = 10
+      const minBondPrice = 400 // bond price = $4
+      const maxBondPayout = 1000 // 1000 = 1% of CLAM total supply
+      const daoFee = 10000 // DAO fee for bond
+      const maxBondDebt = '8000000000000000'
+      const initialBondDebt = 0
+      await daiBond.initializeBondTerms(
+        bcv,
+        bondVestingLength,
+        minBondPrice,
+        maxBondPayout, // Max bond payout,
+        daoFee,
+        maxBondDebt,
+        initialBondDebt
+      )
+
+      await daiBond.setAdjustment(false, 2, 80, 3)
+      const adjustment = await daiBond.adjustment()
+      expect(adjustment[0]).to.be.false
+      expect(adjustment[1]).to.eq(2)
+      expect(adjustment[2]).to.eq(80)
+      expect(adjustment[3]).to.eq(3)
+    })
+  })
+
+  describe('deposit', function () {
+    it('should get vested fully', async function () {
       await treasury.deposit(
         BigNumber.from(10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -178,7 +254,7 @@ describe('Bonding', () => {
       ).to.changeTokenBalance(clam, deployer, '30834236186')
     })
 
-    it('should get vested partially', async () => {
+    it('should get vested partially', async function () {
       await treasury.deposit(
         BigNumber.from(10000).mul(BigNumber.from(10).pow(18)),
         dai.address,
@@ -221,6 +297,49 @@ describe('Bonding', () => {
       await expect(() =>
         daiBond.redeem(deployer.address, false)
       ).to.changeTokenBalance(clam, deployer, totalClam - totalClam.div(5))
+    })
+
+    it('should staked directly', async function () {
+      await treasury.deposit(
+        BigNumber.from(10000).mul(BigNumber.from(10).pow(18)),
+        dai.address,
+        BigNumber.from(7500).mul(BigNumber.from(10).pow(9))
+      )
+
+      const bcv = 300
+      const bondVestingLength = 10
+      const minBondPrice = 400 // bond price = $4
+      const maxBondPayout = 1000 // 1000 = 1% of CLAM total supply
+      const daoFee = 10000 // DAO fee for bond
+      const maxBondDebt = '8000000000000000'
+      const initialBondDebt = 0
+      await daiBond.initializeBondTerms(
+        bcv,
+        bondVestingLength,
+        minBondPrice,
+        maxBondPayout, // Max bond payout,
+        daoFee,
+        maxBondDebt,
+        initialBondDebt
+      )
+
+      let bondPrice = await daiBond.bondPriceInUSD()
+      console.log('bond price: ' + formatEther(bondPrice))
+
+      let depositAmount = BigNumber.from(100).mul(BigNumber.from(10).pow(18))
+      await daiBond.deposit(depositAmount, largeApproval, deployer.address)
+
+      const prevDAOReserve = await clam.balanceOf(daoAddr)
+      expect(prevDAOReserve).to.eq(
+        BigNumber.from(25).mul(BigNumber.from(10).pow(9))
+      )
+      console.log('dao balance: ' + formatUnits(prevDAOReserve, 9))
+
+      await timeAndMine.setTimeIncrease(2)
+
+      await daiBond.redeem(deployer.address, true)
+
+      expect(await sClam.balanceOf(deployer.address)).to.eq('5000000000')
     })
   })
 })

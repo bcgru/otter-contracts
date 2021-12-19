@@ -1,24 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.7.5;
 
+import "./interfaces/IOtterStaking.sol";
+import "./interfaces/IsCLAM.sol";
+
+import "./types/ERC20.sol";
+import "./types/Ownable.sol";
+
 import "./libraries/SafeMath.sol";
-import "./libraries/ERC20.sol";
-import "./libraries/Ownable.sol";
-
-
-interface IsCLAM {
-    function rebase( uint256 clamProfit_, uint epoch_) external returns (uint256);
-
-    function circulatingSupply() external view returns (uint256);
-
-    function balanceOf(address who) external view returns (uint256);
-
-    function gonsForBalance( uint amount ) external view returns ( uint );
-
-    function balanceForGons( uint gons ) external view returns ( uint );
-
-    function index() external view returns ( uint );
-}
+import "./libraries/SafeERC20.sol";
 
 interface IWarmup {
     function retrieve( address staker_, uint amount_ ) external;
@@ -28,7 +18,7 @@ interface IDistributor {
     function distribute() external returns ( bool );
 }
 
-contract OtterStaking is Ownable {
+contract OtterStaking is Ownable, IOtterStaking {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -85,7 +75,7 @@ contract OtterStaking is Ownable {
         @param _amount uint
         @return bool
      */
-    function stake( uint _amount, address _recipient ) external returns ( bool ) {
+    function stake( uint _amount, address _recipient ) external override returns ( bool ) {
         rebase();
 
         IERC20( CLAM ).safeTransferFrom( msg.sender, address(this), _amount );
@@ -108,7 +98,7 @@ contract OtterStaking is Ownable {
         @notice retrieve sCLAM from warmup
         @param _recipient address
      */
-    function claim ( address _recipient ) public {
+    function claim ( address _recipient ) external override {
         Claim memory info = warmupInfo[ _recipient ];
         if ( epoch.number >= info.expiry && info.expiry != 0 ) {
             delete warmupInfo[ _recipient ];

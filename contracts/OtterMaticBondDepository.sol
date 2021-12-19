@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.7.5;
 
-import "./libraries/Ownable.sol";
+import "./interfaces/IOtterTreasury.sol";
+import "./interfaces/IOtterStaking.sol";
+import "./interfaces/IOtterBondingCalculator.sol";
+import "./interfaces/IsCLAM.sol";
+
+import "./types/Ownable.sol";
+import "./types/ERC20.sol";
+
 import "./libraries/FixedPoint.sol";
-import "./libraries/ERC20.sol";
 import "./libraries/SafeMath.sol";
+import "./libraries/Math.sol";
+import "./libraries/SafeERC20.sol";
 
 
 interface AggregatorV3Interface {
@@ -13,19 +21,6 @@ interface AggregatorV3Interface {
   function description() external view returns (string memory);
   function version() external view returns (uint256);
 
-  // getRoundData and latestRoundData should both raise "No data present"
-  // if they do not have data to report, instead of returning unset values
-  // which could be misinterpreted as actual reported values.
-  function getRoundData(uint80 _roundId)
-    external
-    view
-    returns (
-      uint80 roundId,
-      int256 answer,
-      uint256 startedAt,
-      uint256 updatedAt,
-      uint80 answeredInRound
-    );
   function latestRoundData()
     external
     view
@@ -38,42 +33,24 @@ interface AggregatorV3Interface {
     );
 }
 
-interface ITreasury {
-    function deposit( uint _amount, address _token, uint _profit ) external returns ( bool );
-    function valueOfToken( address _token, uint _amount ) external view returns ( uint value_ );
-    function mintRewards( address _recipient, uint _amount ) external;
-}
-
-interface IStaking {
-    function stake( uint _amount, address _recipient ) external returns ( bool );
-}
-
-interface IStakingHelper {
-    function stake( uint _amount, address _recipient ) external;
-}
-
-contract OlympusBondDepository is Ownable {
+contract OtterMaticBondDepository is Ownable {
 
     using FixedPoint for *;
     using SafeERC20 for IERC20;
     using SafeMath for uint;
 
-
-
-
     /* ======== EVENTS ======== */
 
-    event BondCreated( uint deposit, uint indexed payout, uint indexed expires, uint indexed priceInUSD );
+    event BondCreated( uint deposit, uint indexed payout, uint indexed expires, uint indexed priceInUSD, uint gonsPayout );
     event BondRedeemed( address indexed recipient, uint payout, uint remaining );
     event BondPriceChanged( uint indexed priceInUSD, uint indexed internalPrice, uint indexed debtRatio );
     event ControlVariableAdjustment( uint initialBCV, uint newBCV, uint adjustment, bool addition );
 
 
-
-
     /* ======== STATE VARIABLES ======== */
 
     address public immutable CLAM; // token given as payment for bond
+    address public immutable sCLAM; // token given as payment for bond
     address public immutable principle; // token used to create bond
     address public immutable treasury; // mints CLAM when receives principle
     address public immutable DAO; // receives profit share from bond
@@ -81,8 +58,6 @@ contract OlympusBondDepository is Ownable {
     AggregatorV3Interface internal priceFeed;
 
     address public staking; // to auto-stake payout
-    address public stakingHelper; // to stake and claim if no staking warmup
-    bool public useHelper;
 
     Terms public terms; // stores terms for new bonds
     Adjust public adjustment; // stores adjustment to BCV data
@@ -110,8 +85,9 @@ contract OlympusBondDepository is Ownable {
     struct Bond {
         uint payout; // CLAM remaining to be paid
         uint vesting; // Blocks left to vest
-        uint lastBlock; // Last interaction
+        uint lastTimestamp; // Last interaction
         uint pricePaid; // In DAI, for front end viewing
+        uint256 gonsPayout; // sCLAM gons remaining to be paid
     }
 
     // Info for incremental adjustments to control variable
@@ -130,19 +106,25 @@ contract OlympusBondDepository is Ownable {
 
     constructor (
         address _CLAM,
+        address _sCLAM,
         address _principle,
         address _treasury,
         address _DAO,
+        address _staking,
         address _feed
     ) {
         require( _CLAM != address(0) );
         CLAM = _CLAM;
+        require ( _sCLAM != address(0) );
+        sCLAM = _sCLAM;
         require( _principle != address(0) );
         principle = _principle;
         require( _treasury != address(0) );
         treasury = _treasury;
         require( _DAO != address(0) );
         DAO = _DAO;
+        require ( _staking != address(0) );
+        staking = _staking;
         require( _feed != address(0) );
         priceFeed = AggregatorV3Interface( _feed );
     }
@@ -164,7 +146,7 @@ contract OlympusBondDepository is Ownable {
         uint _maxDebt,
         uint _initialDebt
     ) external onlyOwner() {
-        require( currentDebt() == 0, "Debt must be 0 for initialization" );
+        require( terms.controlVariable == 0, "Bonds must be initialized from 0" );
         terms = Terms ({
             controlVariable: _controlVariable,
             vestingTerm: _vestingTerm,
@@ -173,7 +155,7 @@ contract OlympusBondDepository is Ownable {
             maxDebt: _maxDebt
         });
         totalDebt = _initialDebt;
-        lastDecay = block.number;
+        lastDecay = block.timestamp;
     }
 
 
@@ -181,7 +163,7 @@ contract OlympusBondDepository is Ownable {
 
     /* ======== POLICY FUNCTIONS ======== */
 
-    enum PARAMETER { VESTING, PAYOUT, DEBT }
+    enum PARAMETER { VESTING, PAYOUT, DEBT, MINPRICE }
     /**
      *  @notice set parameters for new bonds
      *  @param _parameter PARAMETER
@@ -194,8 +176,10 @@ contract OlympusBondDepository is Ownable {
         } else if ( _parameter == PARAMETER.PAYOUT ) { // 1
             require( _input <= 1000, "Payout cannot be above 1 percent" );
             terms.maxPayout = _input;
-        } else if ( _parameter == PARAMETER.DEBT ) { // 3
+        } else if ( _parameter == PARAMETER.DEBT ) { // 2
             terms.maxDebt = _input;
+        } else if ( _parameter == PARAMETER.MINPRICE) {
+            terms.minimumPrice = _input;
         }
     }
 
@@ -212,7 +196,7 @@ contract OlympusBondDepository is Ownable {
         uint _target,
         uint _buffer
     ) external onlyOwner() {
-        require( _increment <= terms.controlVariable.mul( 25 ).div( 1000 ), "Increment too large" );
+        require( _increment <= Math.max(terms.controlVariable.mul( 25 ).div( 1000 ), 1), "Increment too large" );
 
         adjustment = Adjust({
             add: _addition,
@@ -224,19 +208,12 @@ contract OlympusBondDepository is Ownable {
     }
 
     /**
-     *  @notice set contract for auto stake
+     *  @notice set staking contract
      *  @param _staking address
-     *  @param _helper bool
      */
-    function setStaking( address _staking, bool _helper ) external onlyOwner() {
+    function setStaking( address _staking ) external onlyOwner() {
         require( _staking != address(0) );
-        if ( _helper ) {
-            useHelper = true;
-            stakingHelper = _staking;
-        } else {
-            useHelper = false;
-            staking = _staking;
-        }
+        staking = _staking;
     }
 
 
@@ -266,7 +243,7 @@ contract OlympusBondDepository is Ownable {
 
         require( _maxPrice >= nativePrice, "Slippage limit: more than max price" ); // slippage protection
 
-        uint value = ITreasury( treasury ).valueOfToken( principle, _amount );
+        uint value = IOtterTreasury( treasury ).valueOfToken( principle, _amount );
         uint payout = payoutFor( value ); // payout to bonder is computed
 
         require( payout >= 10000000, "Bond too small" ); // must be > 0.01 CLAM ( underflow protection )
@@ -277,21 +254,28 @@ contract OlympusBondDepository is Ownable {
             asset transfered to treasury and rewards minted as payout
          */
         IERC20( principle ).safeTransferFrom( msg.sender, treasury, _amount );
-        ITreasury( treasury ).mintRewards( address(this), payout );
+        IOtterTreasury( treasury ).mintRewards( address(this), payout );
 
         // total debt is increased
         totalDebt = totalDebt.add( value );
 
+        // stake CLAM
+        IERC20(CLAM).approve(staking, payout);
+        IOtterStaking(staking).stake(payout, address(this));
+        IOtterStaking(staking).claim(address(this));
+
         // depositor info is stored
+        uint256 stakeGons = IsCLAM(sCLAM).gonsForBalance(payout);
         bondInfo[ _depositor ] = Bond({
             payout: bondInfo[ _depositor ].payout.add( payout ),
             vesting: terms.vestingTerm,
-            lastBlock: block.number,
-            pricePaid: priceInUSD
+            lastTimestamp: block.timestamp,
+            pricePaid: priceInUSD,
+            gonsPayout: bondInfo[_depositor].gonsPayout.add(stakeGons)
         });
 
         // indexed events are emitted
-        emit BondCreated( _amount, payout, block.number.add( terms.vestingTerm ), priceInUSD );
+        emit BondCreated( _amount, payout, block.timestamp.add( terms.vestingTerm ), priceInUSD, stakeGons );
         emit BondPriceChanged( bondPriceInUSD(), _bondPrice(), debtRatio() );
 
         adjust(); // control variable is adjusted
@@ -308,60 +292,24 @@ contract OlympusBondDepository is Ownable {
         Bond memory info = bondInfo[ _recipient ];
         uint percentVested = percentVestedFor( _recipient ); // (blocks since last interaction / vesting term remaining)
 
-        if ( percentVested >= 10000 ) { // if fully vested
-            delete bondInfo[ _recipient ]; // delete user info
-            emit BondRedeemed( _recipient, info.payout, 0 ); // emit bond data
-            return stakeOrSend( _recipient, _stake, info.payout ); // pay user everything due
+        require(percentVested >= 10000, "not fully vested"); // if fully vested
 
-        } else { // if unfinished
-            // calculate payout vested
-            uint payout = info.payout.mul( percentVested ).div( 10000 );
-
-            // store updated deposit info
-            bondInfo[ _recipient ] = Bond({
-                payout: info.payout.sub( payout ),
-                vesting: info.vesting.sub( block.number.sub( info.lastBlock ) ),
-                lastBlock: block.number,
-                pricePaid: info.pricePaid
-            });
-
-            emit BondRedeemed( _recipient, payout, bondInfo[ _recipient ].payout );
-            return stakeOrSend( _recipient, _stake, payout );
-        }
+        delete bondInfo[ _recipient ]; // delete user info
+        uint256 _amount = IsCLAM(sCLAM).balanceForGons(info.gonsPayout);
+        emit BondRedeemed(_recipient, _amount, 0); // emit bond data
+        IERC20(sCLAM).transfer(_recipient, _amount); // pay user everything due
+        return _amount;
     }
-
-
 
 
     /* ======== INTERNAL HELPER FUNCTIONS ======== */
-
-    /**
-     *  @notice allow user to stake payout automatically
-     *  @param _stake bool
-     *  @param _amount uint
-     *  @return uint
-     */
-    function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
-        if ( !_stake ) { // if user does not want to stake
-            IERC20( CLAM ).transfer( _recipient, _amount ); // send payout
-        } else { // if user wants to stake
-            if ( useHelper ) { // use if staking warmup is 0
-                IERC20( CLAM ).approve( stakingHelper, _amount );
-                IStakingHelper( stakingHelper ).stake( _amount, _recipient );
-            } else {
-                IERC20( CLAM ).approve( staking, _amount );
-                IStaking( staking ).stake( _amount, _recipient );
-            }
-        }
-        return _amount;
-    }
 
     /**
      *  @notice makes incremental adjustment to control variable
      */
     function adjust() internal {
         uint blockCanAdjust = adjustment.lastBlock.add( adjustment.buffer );
-        if( adjustment.rate != 0 && block.number >= blockCanAdjust ) {
+        if( adjustment.rate != 0 && block.timestamp >= blockCanAdjust ) {
             uint initial = terms.controlVariable;
             if ( adjustment.add ) {
                 terms.controlVariable = terms.controlVariable.add( adjustment.rate );
@@ -384,7 +332,7 @@ contract OlympusBondDepository is Ownable {
      */
     function decayDebt() internal {
         totalDebt = totalDebt.sub( debtDecay() );
-        lastDecay = block.number;
+        lastDecay = block.timestamp;
     }
 
 
@@ -406,7 +354,7 @@ contract OlympusBondDepository is Ownable {
      *  @return uint
      */
     function payoutFor( uint _value ) public view returns ( uint ) {
-        return FixedPoint.fraction( _value, bondPrice() ).decode112with18().div( 1e14 );
+        return FixedPoint.fraction( _value, bondPrice() ).decode112with18().div( 1e16 );
     }
 
 
@@ -415,7 +363,7 @@ contract OlympusBondDepository is Ownable {
      *  @return price_ uint
      */
     function bondPrice() public view returns ( uint price_ ) {
-        price_ = terms.controlVariable.mul( debtRatio() ).div( 1e5 );
+        price_ = _rawBondPrice();
         if ( price_ < terms.minimumPrice ) {
             price_ = terms.minimumPrice;
         }
@@ -426,12 +374,16 @@ contract OlympusBondDepository is Ownable {
      *  @return price_ uint
      */
     function _bondPrice() internal returns ( uint price_ ) {
-        price_ = terms.controlVariable.mul( debtRatio() ).div( 1e5 );
+        price_ = _rawBondPrice();
         if ( price_ < terms.minimumPrice ) {
             price_ = terms.minimumPrice;
         } else if ( terms.minimumPrice != 0 ) {
             terms.minimumPrice = 0;
         }
+    }
+
+    function _rawBondPrice() internal view returns (uint) {
+        return terms.controlVariable.mul( debtRatio() ).div( 1e7 );
     }
 
     /**
@@ -447,7 +399,7 @@ contract OlympusBondDepository is Ownable {
      *  @return price_ uint
      */
     function bondPriceInUSD() public view returns ( uint price_ ) {
-        price_ = bondPrice().mul( uint( assetPrice() ) ).mul( 1e6 );
+        price_ = bondPrice().mul( uint( assetPrice() ) ).mul( 1e8 );
     }
 
 
@@ -484,8 +436,8 @@ contract OlympusBondDepository is Ownable {
      *  @return decay_ uint
      */
     function debtDecay() public view returns ( uint decay_ ) {
-        uint blocksSinceLast = block.number.sub( lastDecay );
-        decay_ = totalDebt.mul( blocksSinceLast ).div( terms.vestingTerm );
+        uint timestampSinceLast = block.timestamp.sub( lastDecay );
+        decay_ = totalDebt.mul( timestampSinceLast ).div( terms.vestingTerm );
         if ( decay_ > totalDebt ) {
             decay_ = totalDebt;
         }
@@ -499,11 +451,11 @@ contract OlympusBondDepository is Ownable {
      */
     function percentVestedFor( address _depositor ) public view returns ( uint percentVested_ ) {
         Bond memory bond = bondInfo[ _depositor ];
-        uint blocksSinceLast = block.number.sub( bond.lastBlock );
+        uint timestampSinceLast = block.timestamp.sub( bond.lastTimestamp );
         uint vesting = bond.vesting;
 
         if ( vesting > 0 ) {
-            percentVested_ = blocksSinceLast.mul( 10000 ).div( vesting );
+            percentVested_ = timestampSinceLast.mul( 10000 ).div( vesting );
         } else {
             percentVested_ = 0;
         }
