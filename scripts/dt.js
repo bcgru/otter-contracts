@@ -4,6 +4,8 @@ const { ethers } = require('hardhat')
 const { BigNumber } = ethers
 const UniswapV2ABI = require('./IUniswapV2Factory.json').abi
 const IUniswapV2Pair = require('./IUniswapV2Pair.json').abi
+const PancakeswapV2ABI = require('./IPancakeFactory.json').abi
+const PancakeswapV2Pair = require('./UniswapV2Pair.json').abi
 
 async function main() {
   const [deployer] = await ethers.getSigners()
@@ -63,29 +65,39 @@ async function main() {
 
   // Deploy DAI
   const DAI = await ethers.getContractFactory('DAI')
-  const dai = await DAI.deploy(chainId);
-  await dai.mint(deployer.address, initialMint)
-  console.log('DAI addr: ' + dai.address)
+  const daiAddress = '0x8301f2213c0eed49a7e28ae4c3e91722919b8b47';
+  // mainBusdAddress = '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56'
+  const dai = await DAI.attach(daiAddress);
+  // const dai = await DAI.deploy(chainId);
+  // await dai.mint(deployer.address, initialMint)
+  
+  // const daiAddress = dai.address;
 
-  const daiAddress = dai.address;
-  // const daiAddress = '0x19f5cD3b383D20E2e7c0652a1f751b6d55823be1';
+  console.log('DAI addr: ' + daiAddress)
 
   // Deploy CLAM
   const CLAM = await ethers.getContractFactory('OtterClamERC20')
-  const clam = await CLAM.deploy()
-  console.log('CLAM deployed: ' + clam.address)
-  const clamAddress = clam.address;
-  // const clamAddress = '0xaBa205A73D46c1Db12d0e67Fc79d1deC3eFCccD3';
+  // const clam = await CLAM.deploy()
+  // console.log('CLAM deployed: ' + clam.address)
+  // const clamAddress = clam.address;
+  const clamAddress = '0xaBa205A73D46c1Db12d0e67Fc79d1deC3eFCccD3';
+  const clam = CLAM.attach(clamAddress)
 
   // Deploy Uniswap
-  const UNISWAP_V2_FACTORY = await ethers.getContractFactory('UniswapV2Factory');
-  uniswapV2Factory = await UNISWAP_V2_FACTORY.deploy(deployer.address); 
-  console.log('uniswapV2Factory address: ', uniswapV2Factory.address)
-  const uniswapV2FactoryAddress = uniswapV2Factory.address;
-  // const uniswapV2FactoryAddress = '0xB09D5Ef162557e8c5666c947a60D49419D848317';
+  // const PANCAKESWAP_V2_FACTORY = await ethers.getContractFactory('PancakeFactory');
+  // uniswapV2Factory = await UNISWAP_V2_FACTORY.deploy(deployer.address); 
+  // console.log('uniswapV2Factory address: ', uniswapV2Factory.address)
+  // const uniswapV2FactoryAddress = uniswapV2Factory.address;
+  const pancakeswapV2FactoryAddress = '0x6725F303b657a9451d8BA641348b6761A6CC7a17';
+  const pancakeswapFactory = new ethers.Contract(
+    pancakeswapV2FactoryAddress,
+    PancakeswapV2ABI,
+    deployer
+  )
+
   // Create Pair
-  await (await uniswapV2Factory.createPair(clamAddress, daiAddress)).wait()
-  const lpAddress = await uniswapV2Factory.getPair(clamAddress, daiAddress)
+  await (await pancakeswapFactory.createPair(clamAddress, daiAddress)).wait()
+  const lpAddress = await pancakeswapFactory.getPair(clamAddress, daiAddress)
   console.log('LP created: ' + lpAddress)
   // const lpAddress = '0xbbBF7bc401A11d08Ba58Aa7b2F25bBc98D2c4203';
 
@@ -286,7 +298,7 @@ async function main() {
   await (await treasury.queue('8', stakingDistributorAddress)).wait(1)
   await treasury.toggle('8', stakingDistributorAddress, zeroAddress)
 
-  const lp = new ethers.Contract(lpAddress, IUniswapV2Pair, deployer)
+  const lp = new ethers.Contract(lpAddress, PancakeswapV2Pair, deployer)
   // Approve the treasury to spend DAI
   await Promise.all([
     (await dai.approve(treasuryAddress, largeApproval)).wait(),

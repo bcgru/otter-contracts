@@ -25,16 +25,20 @@ async function main() {
   // await ido.deployTransaction.wait()
   // console.log('IDO deployed at: ' + ido.address)
 
-  const ido = IDO.attach('0x7f637Ea843405Dff10592f894292A8f1188166F9')
-  // await ido.initialize(
-  //   BigNumber.from(200000).mul(BigNumber.from(10).pow(9)),
-  //   BigNumber.from(5).mul(BigNumber.from(10).pow(18)),
-  //   48 * 60 * 60, // 48 hours
-  //   1635724800 // 2021-11-1 0:00 UTC
-  // )
+  const ido = IDO.attach('0x89b7af9C322Be004C346F208A5bF6A6296418706')
+  await ido.initialize(
+    // total amount
+    BigNumber.from(200000).mul(BigNumber.from(10).pow(9)),
+    // sale price
+    BigNumber.from(5).mul(BigNumber.from(10).pow(18)),
+    // sale length
+    48 * 60 * 60, // 48 hours
+    // start of sale
+    1636502400 // 2021-11-10 0:00 UTC
+  )
 
   const Treasury = await ethers.getContractFactory('OtterTreasury')
-  const treasury = Treasury.attach('0xab328Ca61599974b0f577d1F8AB0129f2842d765')
+  const treasury = Treasury.attach('0x43aA98B811e8799Daf4EC816bbec2542e81790E3')
 
   // let whitelist = fs
   //   .readFileSync(path.resolve(__dirname, './whitelist.txt'))
